@@ -1,84 +1,69 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
-import { ChevronRight, MapPin, Clock, Wifi, ShieldCheck, ShoppingBag, Box, CheckCircle2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+import { ChevronRight, MapPin, Clock, Wifi, ShieldCheck, ShoppingBag, Box, CheckCircle2, Loader2 } from 'lucide-react'
 
 interface OrderItem {
   category: string
   quantity: number
   service: string
+  price: number
 }
 
 interface TimelineEvent {
   status: string
-  timestamp: string
+  timestamp: string | Date
 }
 
 interface Order {
-  id: string
+  _id: string
   orderNumber: string
-  date: string
+  createdAt: string
   status: string
-  total: number
-  category: 'tech_grocery' | 'fashion_care'
-  items: OrderItem[]
+  pricing: {
+    total: number
+    subtotal: number
+    tax: number
+    discount: number
+    deliveryFee: number
+  }
+  clothes: OrderItem[]
   timeline: TimelineEvent[]
-  address: string
-  beaconCode: string
-  notes: string
+  pickupDetails: {
+    address: string
+    notes?: string
+  }
 }
 
-const MOCK_ORDERS: Order[] = [
-  {
-    id: '1',
-    orderNumber: '#MND-8942',
-    date: 'May 21, 2026',
-    status: 'delivered',
-    total: 1798,
-    category: 'tech_grocery',
-    items: [
-      { category: '👔 Premium Shirts', quantity: 3, service: 'Wrinkle-Free Steam Press' },
-      { category: '🧥 Designer Blazer', quantity: 1, service: 'Delicate Dry Cleaning' },
-    ],
-    timeline: [
-      { status: 'Order placed & Secured', timestamp: '2026-05-21 04:15 PM' },
-      { status: 'Smart Beacon logistics assigned', timestamp: '2026-05-21 04:22 PM' },
-      { status: 'Collection courier dispatched', timestamp: '2026-05-21 04:30 PM' },
-      { status: 'Garments cleaned & securely delivered back', timestamp: '2026-05-21 04:50 PM' },
-    ],
-    address: '123 Main Street, Penthouse 4B, New York, NY 10001',
-    beaconCode: 'MN-BEACON-8942-X',
-    notes: 'Safe drop behind the large entrance planter box. Do not ring bell.',
-  },
-  {
-    id: '2',
-    orderNumber: '#MND-7713',
-    date: 'May 20, 2026',
-    status: 'in_wash',
-    total: 1547,
-    category: 'fashion_care',
-    items: [
-      { category: '🧥 Casual Hoodies', quantity: 2, service: 'Eco-Wash & Fold' },
-      { category: '🧵 Designer Silk Saree', quantity: 1, service: 'Couture Restoration' },
-    ],
-    timeline: [
-      { status: 'Order placed & Secured', timestamp: '2026-05-20 11:00 AM' },
-      { status: 'Logistics collection completed', timestamp: '2026-05-20 01:30 PM' },
-      { status: 'Arrived at premium garment care facility', timestamp: '2026-05-20 02:45 PM' },
-      { status: 'Undergoing eco-clean treatment & press', timestamp: '2026-05-20 04:00 PM' },
-    ],
-    address: '123 Main Street, Penthouse 4B, New York, NY 10001',
-    beaconCode: 'MN-BEACON-7713-P',
-    notes: 'Fragile fabrics. Please use eco-friendly garment bags for delivery drop.',
-  },
-]
-
 export default function OrdersPage() {
-  const [selectedOrder, setSelectedOrder] = useState<string | null>('1')
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
 
-  const selectedOrderData = MOCK_ORDERS.find((o) => o.id === selectedOrder)
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true)
+        const res = await apiClient.get<any>('/api/orders')
+        if (res?.success && res.data) {
+          setOrders(res.data)
+          if (res.data.length > 0) {
+            setSelectedOrder(res.data[0]._id)
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load user orders:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrders()
+  }, [])
+
+  const selectedOrderData = orders.find((o) => o._id === selectedOrder)
 
   const getStatusDetails = (status: string) => {
     const details: Record<string, { label: string; bg: string; text: string; border: string }> = {
@@ -93,6 +78,18 @@ export default function OrdersPage() {
       cancelled: { label: 'Transaction Voided', bg: 'bg-red-500/10', text: 'text-red-600', border: 'border-red-500/20' },
     }
     return details[status] || details.pending
+  }
+
+  const formatEventTime = (timestamp: string | Date) => {
+    const d = new Date(timestamp)
+    return d.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
   }
 
   return (
@@ -111,28 +108,33 @@ export default function OrdersPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left: Orders List */}
         <div className="lg:col-span-7 space-y-4">
-          {MOCK_ORDERS.length === 0 ? (
-            <Card variant="elevated" className="border border-slate-100 p-8 text-center">
+          {loading ? (
+            <Card variant="elevated" className="border border-slate-100 p-8 text-center bg-white flex justify-center">
+              <Loader2 className="animate-spin text-primary h-8 w-8" />
+            </Card>
+          ) : orders.length === 0 ? (
+            <Card variant="elevated" className="border border-slate-100 p-8 text-center bg-white">
               <CardBody className="py-8 space-y-3 flex flex-col items-center">
-                <ShoppingBag size={48} className="text-slate-200 animate-bounce" />
+                <ShoppingBag size={48} className="text-slate-200" />
                 <p className="font-extrabold text-slate-400">No orders dispatched yet.</p>
               </CardBody>
             </Card>
           ) : (
+
             <div className="space-y-4">
-              {MOCK_ORDERS.map((order) => {
-                const isSelected = selectedOrder === order.id
+              {orders.map((order) => {
+                const isSelected = selectedOrder === order._id
                 const status = getStatusDetails(order.status)
                 return (
                   <Card
-                    key={order.id}
+                    key={order._id}
                     variant={isSelected ? 'elevated' : 'default'}
                     className={`cursor-pointer transition-all duration-300 border rounded-3xl overflow-hidden hover:shadow-md ${
                       isSelected
                         ? 'border-accent bg-emerald-50/5 ring-1 ring-accent'
                         : 'border-slate-200/60 bg-white hover:border-slate-300'
                     }`}
-                    onClick={() => setSelectedOrder(order.id)}
+                    onClick={() => setSelectedOrder(order._id)}
                   >
                     <CardBody className="p-6">
                       <div className="flex items-start justify-between gap-4 mb-4">
@@ -142,10 +144,10 @@ export default function OrdersPage() {
                               {order.orderNumber}
                             </span>
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">
-                              {order.category === 'tech_grocery' ? 'Tech & Grocery' : 'Fashion & Care'}
+                              Premium Care
                             </span>
                           </div>
-                          <p className="text-xs font-semibold text-slate-400 mt-0.5">{order.date}</p>
+                          <p className="text-xs font-semibold text-slate-400 mt-0.5">{new Date(order.createdAt).toLocaleDateString()}</p>
                         </div>
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-bold border ${status.bg} ${status.text} ${status.border}`}
@@ -156,13 +158,13 @@ export default function OrdersPage() {
 
                       {/* Items details */}
                       <div className="space-y-2 border-y border-slate-100 py-3 mb-4 bg-slate-50/50 -mx-6 px-6">
-                        {order.items.map((item, index) => (
+                        {order.clothes.map((item, index) => (
                           <div key={index} className="flex justify-between items-center text-xs font-bold text-slate-700">
                             <span>
                               {item.quantity}× {item.category}
                             </span>
                             <span className="text-slate-400 font-medium text-[10px] bg-white px-2 py-0.5 rounded border border-slate-100">
-                              {item.service}
+                              {item.service.replace('_', ' ').toUpperCase()}
                             </span>
                           </div>
                         ))}
@@ -171,7 +173,7 @@ export default function OrdersPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Value</p>
-                          <p className="text-lg font-black text-slate-900">₹{order.total}</p>
+                          <p className="text-lg font-black text-slate-900">₹{order.pricing.total}</p>
                         </div>
                         <Button
                           variant="ghost"
@@ -221,11 +223,11 @@ export default function OrdersPage() {
 
                         <div>
                           <p className={`text-xs font-extrabold leading-none ${isLast ? 'text-slate-900 font-black' : 'text-slate-500'}`}>
-                            {event.status}
+                            {event.status.replace('_', ' ').toUpperCase()}
                           </p>
                           <p className="text-[10px] font-semibold text-slate-400 flex items-center gap-1 mt-1 leading-none">
                             <Clock size={10} />
-                            {event.timestamp}
+                            {formatEventTime(event.timestamp)}
                           </p>
                         </div>
                       </div>
@@ -244,7 +246,7 @@ export default function OrdersPage() {
                     <div className="bg-white border border-emerald-100 rounded-xl py-2 px-3 flex justify-between items-center">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">BEACON CODE</span>
                       <span className="text-xs font-black text-accent tracking-wider font-mono select-all">
-                        {selectedOrderData.beaconCode}
+                        {`MN-BEACON-${selectedOrderData.orderNumber.slice(-4)}-X`}
                       </span>
                     </div>
                   </div>
@@ -256,13 +258,13 @@ export default function OrdersPage() {
                       <div>
                         <p className="font-extrabold">Delivery Location</p>
                         <p className="text-slate-500 font-semibold text-[11px] mt-0.5 leading-relaxed">
-                          {selectedOrderData.address}
+                          {selectedOrderData.pickupDetails.address}
                         </p>
                       </div>
                     </div>
-                    {selectedOrderData.notes && (
+                    {selectedOrderData.pickupDetails.notes && (
                       <div className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200/50 p-2 rounded-xl">
-                        💡 <span className="italic">Note: "{selectedOrderData.notes}"</span>
+                        💡 <span className="italic">Note: "{selectedOrderData.pickupDetails.notes}"</span>
                       </div>
                     )}
                   </div>

@@ -1,10 +1,11 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import { useAuthStore } from '@/store/auth'
+import { apiClient } from '@/lib/api-client'
 import {
   Plus,
   Clock,
@@ -14,48 +15,61 @@ import {
   Zap,
   ArrowRight,
   HelpCircle,
+  Loader2,
 } from 'lucide-react'
 
 export default function Dashboard() {
   const { user } = useAuthStore()
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const recentOrders = [
-    {
-      id: '1',
-      orderNumber: '#MND-8942',
-      date: '2026-05-21',
-      status: 'delivered',
-      total: 1798,
-      items: '3× Shirts (Steam Press), 1× Blazer (Dry Clean)',
-      type: 'Couture Drop',
-    },
-    {
-      id: '2',
-      orderNumber: '#MND-7713',
-      date: '2026-05-20',
-      status: 'in_wash',
-      total: 1547,
-      items: '1× Hoodie (Standard Wash), 1× Silk Saree (Dry Clean)',
-      type: 'Premium Care',
-    },
-  ]
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true)
+        const res = await apiClient.get<any>('/api/orders')
+        if (res?.success && res.data) {
+          setOrders(res.data)
+        }
+      } catch (e) {
+        console.error('Failed to fetch orders on dashboard:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrders()
+  }, [])
+
+  // Calculate dynamic stats
+  const activeOrdersCount = orders.filter(
+    (o) => o.status !== 'delivered' && o.status !== 'cancelled'
+  ).length
+
+  const totalCleanedGarments = orders
+    .filter((o) => o.status === 'delivered')
+    .reduce((sum, o) => {
+      const garmentsCount = o.clothes?.reduce((acc: number, item: any) => acc + item.quantity, 0) || 0
+      return sum + garmentsCount
+    }, 0)
+
+  const fabricEcoPoints = orders.filter((o) => o.status === 'delivered').length * 100
 
   const stats = [
     {
       label: 'Active Care Dispatches',
-      value: '1',
+      value: activeOrdersCount.toString(),
       icon: Clock,
       color: 'from-blue-500 to-indigo-600',
     },
     {
       label: 'Total Cleaned Garments',
-      value: '28',
+      value: totalCleanedGarments.toString(),
       icon: CheckCircle,
       color: 'from-emerald-500 to-teal-600',
     },
     {
       label: 'Fabric Eco-Points',
-      value: '1,430 XP',
+      value: `${fabricEcoPoints.toLocaleString()} XP`,
       icon: TrendingUp,
       color: 'from-accent to-emerald-500',
     },
@@ -99,12 +113,16 @@ export default function Dashboard() {
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string }> = {
       pending: { bg: 'bg-amber-50 text-amber-800 border-amber-100', text: 'Awaiting Pickup' },
+      assigned: { bg: 'bg-cyan-50 text-cyan-800 border-cyan-100', text: 'Courier Assigned' },
+      collected: { bg: 'bg-indigo-50 text-indigo-800 border-indigo-100', text: 'Garments Collected' },
       in_wash: { bg: 'bg-blue-50 text-blue-800 border-blue-100', text: 'Undergoing Care' },
+      ready: { bg: 'bg-teal-50 text-teal-800 border-teal-100', text: 'Ready back' },
       delivered: { bg: 'bg-emerald-50 text-emerald-800 border-emerald-100', text: 'Securely Delivered' },
       cancelled: { bg: 'bg-red-50 text-red-800 border-red-100', text: 'Voided' },
     }
     return badges[status] || { bg: 'bg-slate-50 text-slate-800 border-slate-100', text: 'Active Telemetry' }
   }
+
 
   return (
     <div className="space-y-8 text-left animate-fade-in">
@@ -201,32 +219,37 @@ export default function Dashboard() {
               </div>
             </CardHeader>
             <CardBody className="p-6">
-              {recentOrders.length === 0 ? (
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="animate-spin text-primary h-8 w-8" />
+                </div>
+              ) : orders.length === 0 ? (
                 <div className="text-center py-12 space-y-3">
                   <ShoppingBag size={40} className="mx-auto text-slate-300" />
                   <p className="text-slate-500 font-semibold">No active collections found</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {recentOrders.map((order) => {
+                  {orders.slice(0, 3).map((order) => {
                     const badge = getStatusBadge(order.status)
+                    const itemsString = order.clothes?.map((item: any) => `${item.quantity}× ${item.category} (${item.service.replace('_', ' ')})`).join(', ') || 'No garments'
                     return (
                       <div
-                        key={order.id}
+                        key={order._id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border border-slate-100 rounded-2xl hover:shadow-sm hover:border-slate-200 transition-all gap-4 bg-white"
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-extrabold text-slate-950 text-sm">{order.orderNumber}</span>
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 uppercase border border-slate-200">
-                              {order.type}
+                              {order.payment.method.toUpperCase()}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 font-semibold line-clamp-1">{order.items}</p>
-                          <p className="text-[10px] text-slate-400 font-semibold">{order.date}</p>
+                          <p className="text-xs text-slate-500 font-semibold line-clamp-1">{itemsString}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold">{new Date(order.createdAt).toLocaleDateString()}</p>
                         </div>
                         <div className="flex sm:flex-col items-center sm:items-end justify-between shrink-0 gap-2">
-                          <p className="font-black text-slate-950 text-base">₹{order.total}</p>
+                          <p className="font-black text-slate-950 text-base">₹{order.pricing.total}</p>
                           <span
                             className={`inline-block text-[10px] font-bold px-2.5 py-1 rounded-full border leading-none ${badge.bg}`}
                           >

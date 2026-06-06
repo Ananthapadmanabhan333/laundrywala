@@ -107,8 +107,6 @@ const userSchema = new Schema<IUser>(
   }
 )
 
-userSchema.index({ phone: 1 })
-userSchema.index({ firebaseUID: 1 })
 userSchema.index({ accountType: 1 })
 userSchema.index({ createdAt: -1 })
 

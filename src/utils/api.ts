@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyToken } from '@/lib/auth'
 
 export interface ApiResponse<T = any> {
   success: boolean
@@ -95,3 +96,35 @@ export async function validateRequest<T>(
     }
   }
 }
+
+export function getAuthUserId(request: NextRequest): string {
+  // 1. Try reading the forwarded header set by the middleware
+  const headerUserId = request.headers.get('x-user-id')
+  if (headerUserId) return headerUserId
+
+  // 2. Fallback to cookie or auth header
+  let token = request.cookies.get('auth-token')?.value
+  if (!token) {
+    const authHeader = request.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7)
+    }
+  }
+
+  if (!token) {
+    throw new AppError(401, 'Unauthorized: Missing token')
+  }
+
+  const { valid, payload } = verifyToken(token)
+  if (!valid || !payload) {
+    throw new AppError(401, 'Unauthorized: Invalid token')
+  }
+
+  const userId = payload.userId || payload.sub
+  if (!userId) {
+    throw new AppError(401, 'Unauthorized: Invalid token payload structure')
+  }
+
+  return userId
+}
+

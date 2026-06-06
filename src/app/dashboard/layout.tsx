@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/store/auth'
 import { useCartStore } from '@/store/cart'
@@ -16,9 +16,21 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, isAuthenticated, isLoading, logout } = useAuthStore()
   const { items: cartItems } = useCartStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (mounted && !isLoading && !isAuthenticated) {
+      router.push('/auth/login')
+    }
+  }, [mounted, isAuthenticated, isLoading, router])
 
   const handleLogout = () => {
     logout()

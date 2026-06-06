@@ -60,12 +60,11 @@ export default function LoginPage() {
       })
 
       if (response?.success) {
-        const { token, user } = response.data
-        setToken(token)
-        setUser(user)
-        localStorage.setItem('authToken', token)
-        toast.success('Welcome to MANODROP!')
-        router.push('/dashboard')
+        const { user } = response.data;
+        setUser(user);
+        // No client‑side cookie; the server will set an HttpOnly cookie.
+        toast.success('Welcome to MANODROP!');
+        router.push('/');
       }
     } catch (error: any) {
       setError(error.message || 'Failed to verify OTP')

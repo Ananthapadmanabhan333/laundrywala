@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { connectDB } from '@/lib/db'
 import { Order } from '@/models/Order'
 import { Pricing } from '@/models/Pricing'
-import { successResponse, errorResponse, AppError } from '@/utils/api'
+import { successResponse, errorResponse, AppError, getAuthUserId } from '@/utils/api'
 import * as z from 'zod'
-import jwt from 'jsonwebtoken'
 
 const createOrderSchema = z.object({
   clothes: z.array(
@@ -22,21 +21,6 @@ const createOrderSchema = z.object({
   longitude: z.number(),
   paymentMethod: z.enum(['razorpay', 'cod']),
 })
-
-function getAuthUserId(request: NextRequest): string {
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new AppError(401, 'Unauthorized')
-  }
-
-  const token = authHeader.slice(7)
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
-    return decoded.userId
-  } catch {
-    throw new AppError(401, 'Invalid token')
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,47 +1,56 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
-import { Users, ShoppingBag, TrendingUp, DollarSign } from 'lucide-react'
-
-const REVENUE_DATA = [
-  { date: 'Mon', revenue: 4000, orders: 24 },
-  { date: 'Tue', revenue: 3000, orders: 12 },
-  { date: 'Wed', revenue: 2000, orders: 10 },
-  { date: 'Thu', revenue: 5000, orders: 29 },
-  { date: 'Fri', revenue: 4500, orders: 24 },
-  { date: 'Sat', revenue: 6000, orders: 35 },
-  { date: 'Sun', revenue: 5500, orders: 32 },
-]
-
-const ORDERS_DATA = [
-  { name: 'Pending', value: 12, color: '#FCD34D' },
-  { name: 'In Progress', value: 24, color: '#60A5FA' },
-  { name: 'Completed', value: 234, color: '#10B981' },
-  { name: 'Cancelled', value: 8, color: '#EF4444' },
-]
+import { Users, ShoppingBag, TrendingUp, DollarSign, Loader2 } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
 
 export default function AdminDashboard() {
+  const [analytics, setAnalytics] = useState<any>(null)
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      try {
+        setLoading(true)
+        const analyticsRes = await apiClient.get<any>('/api/admin/analytics')
+        if (analyticsRes?.success) {
+          setAnalytics(analyticsRes.data)
+        }
+        const ordersRes = await apiClient.get<any>('/api/admin/orders')
+        if (ordersRes?.success) {
+          setOrders(ordersRes.data)
+        }
+      } catch (e) {
+        console.error('Failed to load admin telemetry dashboard details:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAdminData()
+  }, [])
+
   const stats = [
     {
       label: 'Total Revenue',
-      value: '₹29,500',
+      value: analytics ? `₹${analytics.totalRevenue.toLocaleString()}` : '₹0',
       change: '+12.5%',
       icon: DollarSign,
       color: 'from-green-400 to-green-600',
     },
     {
       label: 'Total Orders',
-      value: '278',
+      value: analytics ? analytics.totalOrders.toString() : '0',
       change: '+8.2%',
       icon: ShoppingBag,
       color: 'from-blue-400 to-blue-600',
     },
     {
       label: 'Active Users',
-      value: '1,245',
+      value: analytics ? analytics.totalUsers.toString() : '0',
       change: '+23.1%',
       icon: Users,
       color: 'from-purple-400 to-purple-600',
@@ -55,8 +64,19 @@ export default function AdminDashboard() {
     },
   ]
 
+  const trendData = analytics?.trendData || []
+  const statusData = analytics?.statusData || []
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-primary h-12 w-12" />
+      </div>
+    )
+  }
+
   return (
-    <div className="p-4 sm:p-6">
+    <div className="p-4 sm:p-6 text-left">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Admin Dashboard
@@ -100,7 +120,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardBody>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={REVENUE_DATA}>
+              <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -130,7 +150,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardBody>
             <div className="space-y-4">
-              {ORDERS_DATA.map((status, index) => (
+              {statusData.map((status: any, index: number) => (
                 <div key={index}>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">
@@ -142,10 +162,9 @@ export default function AdminDashboard() {
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
-                      className="h-2 rounded-full"
+                      className="h-2 rounded-full bg-primary"
                       style={{
-                        width: `${(status.value / 300) * 100}%`,
-                        backgroundColor: status.color,
+                        width: `${(status.value / Math.max(1, analytics?.totalOrders || 1)) * 100}%`,
                       }}
                     />
                   </div>
@@ -155,6 +174,7 @@ export default function AdminDashboard() {
           </CardBody>
         </Card>
       </div>
+
 
       {/* Recent Orders */}
       <Card variant="elevated">
@@ -189,53 +209,34 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {[
-                  {
-                    id: '#ORD001',
-                    customer: 'John Doe',
-                    items: 'Shirts, Jeans',
-                    amount: '₹299',
-                    status: 'Delivered',
-                  },
-                  {
-                    id: '#ORD002',
-                    customer: 'Jane Smith',
-                    items: 'Saree, Blazer',
-                    amount: '₹449',
-                    status: 'In Progress',
-                  },
-                  {
-                    id: '#ORD003',
-                    customer: 'Mike Johnson',
-                    items: 'Shirts, T-Shirts',
-                    amount: '₹199',
-                    status: 'Pending',
-                  },
-                ].map((order) => (
-                  <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4 font-medium text-gray-900">
-                      {order.id}
-                    </td>
-                    <td className="py-3 px-4 text-gray-700">{order.customer}</td>
-                    <td className="py-3 px-4 text-gray-700">{order.items}</td>
-                    <td className="py-3 px-4 font-semibold text-gray-900">
-                      {order.amount}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          order.status === 'Delivered'
-                            ? 'bg-green-100 text-green-800'
-                            : order.status === 'In Progress'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {orders.slice(0, 5).map((order) => {
+                  const itemsString = order.clothes?.map((c: any) => `${c.quantity}x ${c.category}`).join(', ') || 'No items'
+                  return (
+                    <tr key={order._id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-medium text-gray-900">
+                        {order.orderNumber}
+                      </td>
+                      <td className="py-3 px-4 text-gray-700">{order.userId?.name || 'Customer'}</td>
+                      <td className="py-3 px-4 text-gray-700">{itemsString}</td>
+                      <td className="py-3 px-4 font-semibold text-gray-900">
+                        ₹{order.pricing?.total}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            order.status === 'delivered'
+                              ? 'bg-green-100 text-green-800'
+                              : order.status === 'cancelled'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {order.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

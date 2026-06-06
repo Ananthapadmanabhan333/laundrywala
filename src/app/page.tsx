@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/Button'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Logo } from '@/components/Logo'
+import { Navbar } from '@/components/Navbar'
 import {
   ArrowRight,
   ShieldCheck,
@@ -17,11 +18,14 @@ import {
   ChevronRight,
   Send,
   Zap,
+  Minus,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/auth'
 
 export default function HomePage() {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const [emailSub, setEmailSub] = useState('')
 
   const categories = [
@@ -92,44 +96,103 @@ export default function HomePage() {
     setEmailSub('')
   }
 
+  // Active Pricing Tab State
+  const [activePricingTab, setActivePricingTab] = useState<'wash_fold' | 'steam_press' | 'dry_clean' | 'restoration'>('wash_fold')
+
+  // Quantities State
+  const [quantities, setQuantities] = useState<Record<string, number>>({})
+
+  const pricingCategories = {
+    wash_fold: {
+      title: '👕 Eco Wash & Fold',
+      subtitle: 'Premium organic wash, allergen-free softeners, and impeccable hand-folding.',
+      icon: '👕',
+      items: [
+        { name: 'T-shirt / Top', price: 29 },
+        { name: 'Jeans / Trousers', price: 39 },
+        { name: 'Bed Sheets / Linens', price: 59 },
+        { name: 'Undergarments', price: 19 },
+        { name: 'Socks / Handkerchief', price: 9 }
+      ]
+    },
+    steam_press: {
+      title: '👔 Professional Steam Pressing',
+      subtitle: 'Crisp wrinkle-free finish using multi-temperature vertical steam.',
+      icon: '👔',
+      items: [
+        { name: 'Formal Shirt', price: 15 },
+        { name: 'Formal Trousers', price: 15 },
+        { name: 'Blazer / Jacket', price: 49 },
+        { name: 'Saree / Ethnic Wear', price: 59 },
+        { name: 'Designer Dress', price: 39 }
+      ]
+    },
+    dry_clean: {
+      title: '✨ Premium Dry Cleaning',
+      subtitle: 'Expert non-toxic care for luxury fabrics, suits, sarees, and heavy designer couture.',
+      icon: '✨',
+      items: [
+        { name: 'Suit (2-piece)', price: 249 },
+        { name: 'Designer Silk Saree', price: 199 },
+        { name: 'Winter Coat / Jacket', price: 299 },
+        { name: 'Premium Leather Jacket', price: 499 },
+        { name: 'Luxury Silk Dress', price: 179 }
+      ]
+    },
+    restoration: {
+      title: '🧵 Couture Restoration',
+      subtitle: 'Advanced stain extraction, fabric conditioning, and material preservation.',
+      icon: '🧵',
+      items: [
+        { name: 'Stain Extraction (Spot)', price: 99 },
+        { name: 'Color Revitalization', price: 149 },
+        { name: 'Advanced Fabric Conditioning', price: 79 },
+        { name: 'Antimicrobial Sanitizing Wash', price: 49 }
+      ]
+    }
+  }
+
+  // Helper to update item quantity
+  const updateQty = (itemName: string, change: number) => {
+    setQuantities((prev) => {
+      const current = prev[itemName] || 0
+      const next = Math.max(0, current + change)
+      const updated = { ...prev }
+      if (next === 0) {
+        delete updated[itemName]
+      } else {
+        updated[itemName] = next
+      }
+      return updated
+    })
+  }
+
+  // Reset estimator helper
+  const resetEstimator = () => {
+    setQuantities({})
+  }
+
+  // Get selected items
+  const selectedItems = Object.entries(quantities).map(([name, qty]) => {
+    // Find the item price in the categories
+    let price = 0
+    for (const cat of Object.values(pricingCategories)) {
+      const found = cat.items.find(i => i.name === name)
+      if (found) {
+        price = found.price
+        break
+      }
+    }
+    return { name, qty, price }
+  }).filter(item => item.qty > 0)
+
+  // Calculate estimated total
+  const estimatedTotal = selectedItems.reduce((acc, curr) => acc + (curr.qty * curr.price), 0)
+
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-accent selection:text-white">
       {/* Dynamic Header / Navigation */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 transition-all duration-300">
-        <div className="container-custom flex items-center justify-between py-4">
-          <Link href="/">
-            <Logo size="md" />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
-            <Link href="#services" className="hover:text-primary transition-colors">Garment Services</Link>
-            <Link href="#metrics" className="hover:text-primary transition-colors">Why MANODROP</Link>
-            <Link href="#pricing" className="hover:text-primary transition-colors">Subscriptions</Link>
-            <Link href="#testimonials" className="hover:text-primary transition-colors">Reviews</Link>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button size="sm" className="bg-primary hover:bg-primary/95 text-white font-semibold shadow-md px-5 py-2.5 rounded-xl transition-all hover:-translate-y-0.5">
-                  User Dashboard
-                </Button>
-              </Link>
-            ) : (
-              <>
-                <Link href="/auth/login" className="text-sm font-bold text-slate-700 hover:text-primary transition-colors px-4 py-2">
-                  Sign In
-                </Link>
-                <Link href="/auth/login">
-                  <Button size="sm" className="bg-gradient-to-r from-primary via-slate-900 to-primary hover:from-primary hover:to-accent text-white font-bold px-6 py-2.5 rounded-xl shadow-md transition-all hover:-translate-y-0.5">
-                    Schedule Pickup
-                  </Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero Section */}
       <header className="relative overflow-hidden bg-gradient-to-br from-primary via-[#0B1E36] to-slate-950 py-24 sm:py-36 text-white">
@@ -140,11 +203,18 @@ export default function HomePage() {
 
         <div className="container-custom relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-7 space-y-8 text-left">
-            {/* Tag/Badge */}
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-accent border border-white/10">
-              <Zap size={14} className="animate-bounce" />
-              Smart IoT On-Demand Garment Care
-            </div>
+            {/* Tag/Badge / Welcome Greeting */}
+            {user ? (
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 backdrop-blur-md px-4 py-2 rounded-full text-sm font-bold text-accent border border-accent/20 animate-fade-in">
+                <Sparkles size={16} className="text-accent animate-pulse" />
+                <span>Welcome back, {user.name}! ✨</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-accent border border-white/10">
+                <Zap size={14} className="animate-bounce" />
+                Smart IoT On-Demand Garment Care
+              </div>
+            )}
 
             <h1 className="text-5xl sm:text-7xl font-extrabold tracking-tight leading-none text-white">
               Premium Fabric Care,<br />
@@ -333,93 +403,182 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Pricing / Delivery Packages */}
-      <section id="pricing" className="py-24 sm:py-32 bg-slate-50">
+      {/* Pricing / Interactive Estimator Section */}
+      <section id="pricing" className="py-24 sm:py-32 bg-slate-50 border-t border-slate-100">
         <div className="container-custom">
           <div className="max-w-3xl mx-auto text-center mb-16 space-y-4">
+            <div className="inline-flex items-center gap-2 bg-primary/5 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider text-primary border border-primary/10">
+              Transparent Pay-Per-Piece Pricing
+            </div>
             <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">
-              Garment Care Subscriptions
+              Honest Pricing. Zero Commitments.
             </h2>
             <p className="text-lg text-slate-500">
-              Select a specialized plan to secure prioritized collections, dedicated hangers, and zero peak-hour surcharges.
+              No locked-in monthly subscriptions. Pay only for the garments you need cleaned. Use our live estimator to calculate your order cost instantly!
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {[
-              {
-                title: 'Eco Essential',
-                price: '₹29',
-                period: 'per garment',
-                features: ['Standard next-day turnaround', 'Soft machine-wash & detailed fold', 'Standard eco-detergents included', 'SMS alert notifications'],
-                popular: false,
-                buttonText: 'Pay per Order',
-              },
-              {
-                title: 'MANODROP Gold Care',
-                price: '₹999',
-                period: 'per month',
-                features: ['Unlimited free collections', 'Guaranteed priority 12-hr express', 'Up to 30 free hanger pressing drops', '15% discount on luxury dry cleans'],
-                popular: true,
-                buttonText: 'Join Gold Care',
-              },
-              {
-                title: 'Couture Suite',
-                price: '₹2499',
-                period: 'per month',
-                features: ['Unlimited free collections', 'Pre-scheduled weekly collection slot', 'Specialized white-glove logistics', 'Personal garment technician advisor'],
-                popular: false,
-                buttonText: 'Subscribe to Couture Suite',
-              },
-            ].map((plan, idx) => (
-              <Card
-                key={idx}
-                variant={plan.popular ? 'elevated' : 'default'}
-                className={`flex flex-col justify-between border-2 rounded-3xl p-4 transition-all duration-300 ${
-                  plan.popular
-                    ? 'border-accent bg-white shadow-xl scale-105'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
-              >
-                <CardBody className="space-y-6">
-                  {plan.popular && (
-                    <span className="inline-block bg-accent text-slate-950 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
-                      Most Selected Suite
-                    </span>
-                  )}
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-black text-slate-950">{plan.title}</h3>
-                    <div>
-                      <span className="text-4xl font-extrabold text-slate-950">{plan.price}</span>
-                      <span className="text-sm font-semibold text-slate-500 ml-1.5">{plan.period}</span>
-                    </div>
-                  </div>
-
-                  <ul className="space-y-4 border-t border-slate-100 pt-6">
-                    {plan.features.map((feat, fIdx) => (
-                      <li key={fIdx} className="flex items-center gap-3 text-sm text-slate-600 font-medium">
-                        <div className="bg-accent/15 w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                          <span className="text-[10px] text-accent font-black">✓</span>
-                        </div>
-                        {feat}
-                      </li>
-                    ))}
-                  </ul>
-                </CardBody>
-                <div className="p-6 pt-0 mt-6">
-                  <Button
-                    fullWidth
-                    className={`rounded-2xl py-3.5 font-bold transition-all text-sm uppercase tracking-wide ${
-                      plan.popular
-                        ? 'bg-gradient-to-r from-accent to-emerald-500 hover:from-emerald-500 hover:to-accent text-slate-950 shadow-md hover:-translate-y-0.5'
-                        : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 max-w-6xl mx-auto items-start">
+            {/* Left Column: Interactive Tabbed Service Catalog */}
+            <div className="lg:col-span-7 space-y-8">
+              {/* Category Tab Selectors */}
+              <div className="flex bg-slate-200/60 p-1.5 rounded-2xl gap-1">
+                {Object.entries(pricingCategories).map(([key, cat]) => (
+                  <button
+                    key={key}
+                    onClick={() => setActivePricingTab(key as any)}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all ${
+                      activePricingTab === key
+                        ? 'bg-white text-slate-950 shadow-md font-extrabold scale-[1.02]'
+                        : 'text-slate-600 hover:bg-white/45'
                     }`}
                   >
-                    {plan.buttonText}
-                  </Button>
+                    <span className="text-lg">{cat.icon}</span>
+                    <span className="hidden sm:inline">{cat.title.split(' ').slice(1).join(' ') || cat.title}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Active Tab Headings */}
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                  <span className="text-3xl bg-primary/10 w-12 h-12 rounded-xl flex items-center justify-center">
+                    {pricingCategories[activePricingTab].icon}
+                  </span>
+                  {pricingCategories[activePricingTab].title}
+                </h3>
+                <p className="text-slate-500 text-sm font-medium">
+                  {pricingCategories[activePricingTab].subtitle}
+                </p>
+              </div>
+
+              {/* Items List */}
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm divide-y divide-slate-100">
+                {pricingCategories[activePricingTab].items.map((item) => {
+                  const qty = quantities[item.name] || 0
+                  return (
+                    <div key={item.name} className="py-4 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-slate-900">{item.name}</p>
+                        <p className="text-sm font-bold text-primary">₹{item.price} <span className="text-slate-400 font-medium">/ piece</span></p>
+                      </div>
+
+                      {/* Quantity Selector */}
+                      <div className="flex items-center gap-3 bg-slate-50 border border-slate-200/80 p-1 rounded-xl">
+                        <button
+                          onClick={() => updateQty(item.name, -1)}
+                          disabled={qty === 0}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-slate-600 hover:bg-slate-200/80 transition-colors ${
+                            qty === 0 ? 'opacity-30 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="w-8 text-center text-sm font-black text-slate-950">
+                          {qty}
+                        </span>
+                        <button
+                          onClick={() => updateQty(item.name, 1)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-slate-600 hover:bg-slate-200/80 transition-colors"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Right Column: Sticky Estimator & Summary */}
+            <div className="lg:col-span-5 lg:sticky lg:top-24">
+              <Card variant="elevated" className="border border-slate-200 rounded-3xl shadow-lg bg-white overflow-hidden relative">
+                {/* Visual Header */}
+                <div className="bg-gradient-to-r from-primary via-[#0B1E36] to-slate-950 text-white p-6 relative">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_right_bottom,#10b981,transparent_55%)] opacity-30" />
+                  <div className="relative z-10 space-y-1">
+                    <h3 className="text-xl font-black">Live Order Estimator</h3>
+                    <p className="text-xs text-slate-300">Add garments to view estimated total cost</p>
+                  </div>
                 </div>
+
+                <CardBody className="p-6 space-y-6">
+                  {selectedItems.length === 0 ? (
+                    <div className="py-12 text-center space-y-3">
+                      <div className="w-16 h-16 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400 text-2xl">
+                        🛒
+                      </div>
+                      <p className="text-sm font-bold text-slate-400">Your estimator is empty</p>
+                      <p className="text-xs text-slate-400 max-w-xs mx-auto">Select a category and increase item quantities to begin building your custom order estimate.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selected Items Breakdown */}
+                      <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                        {selectedItems.map((item) => {
+                          const qty = quantities[item.name] || 0
+                          return (
+                            <div key={item.name} className="flex justify-between items-center text-sm border-b border-slate-50 pb-2">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => updateQty(item.name, -qty)}
+                                  className="text-slate-400 hover:text-red-500 transition-colors"
+                                  title="Remove item"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                                <span className="font-semibold text-slate-800">{item.name}</span>
+                              </div>
+                              <span className="font-bold text-slate-950">
+                                {qty} × ₹{item.price} = ₹{qty * item.price}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      {/* Calculations breakdown */}
+                      <div className="space-y-2 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500">
+                        <div className="flex justify-between">
+                          <span>Subtotal</span>
+                          <span className="text-slate-800">₹{estimatedTotal}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Home Pickup & Delivery</span>
+                          <span className="text-accent bg-accent/15 px-2 py-0.5 rounded-md font-bold uppercase tracking-wider text-[10px]">FREE</span>
+                        </div>
+                      </div>
+
+                      {/* Estimated Total */}
+                      <div className="flex justify-between items-center border-t border-slate-100 pt-4">
+                        <div>
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estimated Total</p>
+                          <p className="text-3xl font-black text-slate-950">₹{estimatedTotal}</p>
+                        </div>
+                        <button
+                          onClick={resetEstimator}
+                          className="text-xs font-bold text-red-500 hover:text-red-600 hover:underline transition-colors uppercase tracking-wider"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+
+                      {/* Book CTA */}
+                      <Link href={isAuthenticated ? '/dashboard' : '/auth/login'}>
+                        <Button
+                          fullWidth
+                          size="lg"
+                          className="bg-gradient-to-r from-accent to-emerald-500 hover:from-emerald-500 hover:to-accent text-slate-950 font-black py-4 rounded-2xl shadow-xl transition-all duration-300 flex items-center justify-center uppercase tracking-wider text-sm mt-2 font-sans"
+                        >
+                          Book Care Drop Now
+                          <ArrowRight size={16} className="ml-2" />
+                        </Button>
+                      </Link>
+                    </>
+                  )}
+                </CardBody>
               </Card>
-            ))}
+            </div>
           </div>
         </div>
       </section>

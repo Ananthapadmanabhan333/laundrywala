@@ -1,22 +1,76 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody, CardFooter } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
+import { Modal } from '@/components/ui/Modal'
 import { useAuthStore } from '@/store/auth'
-import { Bell, Lock, MapPin, Phone, User, Shield, Check, Trash2, Key } from 'lucide-react'
+import { apiClient } from '@/lib/api-client'
+import { Bell, Lock, MapPin, Phone, User, Shield, Check, Trash2, Key, Loader2 } from 'lucide-react'
 import { toast } from 'react-toastify'
 
+interface AddressItem {
+  _id: string
+  title: string
+  addressLine: string
+  latitude: number
+  longitude: number
+  isDefault: boolean
+}
+
 export default function SettingsPage() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, setUser } = useAuthStore()
   const [activeTab, setActiveTab] = useState('profile')
   const [formData, setFormData] = useState({
-    name: user?.name || 'Ananthapadmanabhan',
-    email: user?.email || 'ananth@manodrop.com',
-    phone: user?.phone || '+91 9999999999',
-    address: user?.address || '123 Main St, Penthouse 4B, New York, NY 10001',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    address: user?.address || '',
   })
+
+  // Sync state if store updates
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        address: user.address || '',
+      })
+    }
+  }, [user])
+
+  const [addresses, setAddresses] = useState<AddressItem[]>([])
+  const [loadingAddresses, setLoadingAddresses] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [addressFormData, setAddressFormData] = useState({
+    title: '',
+    addressLine: '',
+    latitude: 8.5241,
+    longitude: 76.9366,
+    isDefault: false,
+  })
+
+  const fetchAddresses = async () => {
+    try {
+      setLoadingAddresses(true)
+      const response = await apiClient.get<any>('/api/addresses')
+      if (response?.success && response.data) {
+        setAddresses(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to load addresses:', error)
+    } finally {
+      setLoadingAddresses(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'address') {
+      fetchAddresses()
+    }
+  }, [activeTab])
 
   const [notificationPreferences, setNotificationPreferences] = useState([
     { id: 'updates', title: 'Order Telemetry Updates', description: 'Get live tracker updates on your smart drops', checked: true },
@@ -32,8 +86,20 @@ export default function SettingsPage() {
     { id: 'address', label: 'Saved Locations', icon: MapPin },
   ]
 
-  const handleProfileSave = () => {
-    toast.success('Profile details saved successfully!')
+  const handleProfileSave = async () => {
+    try {
+      const res = await apiClient.put<any>('/api/auth/me', {
+        name: formData.name,
+        email: formData.email,
+        address: formData.address,
+      })
+      if (res?.success && res.data) {
+        setUser(res.data)
+        toast.success('Profile details saved successfully!')
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update profile')
+    }
   }
 
   const handlePreferenceToggle = (id: string) => {
@@ -47,6 +113,41 @@ export default function SettingsPage() {
     e.preventDefault()
     toast.success('Your security password has been updated.')
   }
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const res = await apiClient.post<any>('/api/addresses', addressFormData)
+      if (res?.success) {
+        toast.success('Address saved successfully!')
+        setIsModalOpen(false)
+        setAddressFormData({
+          title: '',
+          addressLine: '',
+          latitude: 8.5241,
+          longitude: 76.9366,
+          isDefault: false,
+        })
+        fetchAddresses()
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save address')
+    }
+  }
+
+  const handleDeleteAddress = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this address?')) return
+    try {
+      const res = await apiClient.delete<any>(`/api/addresses/${id}`)
+      if (res?.success) {
+        toast.success('Address deleted successfully!')
+        fetchAddresses()
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete address')
+    }
+  }
+
 
   return (
     <div className="space-y-8 text-left animate-fade-in">
@@ -287,55 +388,117 @@ export default function SettingsPage() {
             <Card variant="elevated" className="border border-slate-100 shadow-lg rounded-3xl overflow-hidden bg-white">
               <CardHeader className="bg-slate-50/50 p-6 border-b border-slate-100 flex items-center justify-between">
                 <h2 className="text-lg font-black text-slate-900 uppercase tracking-tight">Saved Locations</h2>
-                <Button size="sm" className="rounded-xl text-xs py-2">
+                <Button size="sm" className="rounded-xl text-xs py-2" onClick={() => setIsModalOpen(true)}>
                   Add New Drop
                 </Button>
               </CardHeader>
               <CardBody className="p-6 space-y-4">
-                {[
-                  {
-                    title: 'Penthouse Suite (Home)',
-                    address: '123 Main St, Penthouse 4B, New York, NY 10001',
-                    default: true,
-                  },
-                  {
-                    title: 'Corporate Headquarters (Office)',
-                    address: '456 Oak Ave, Suite 200, Manhattan, NY 10002',
-                    default: false,
-                  },
-                ].map((addr, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 border rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-                      addr.default
-                        ? 'border-accent bg-emerald-50/5 ring-1 ring-accent'
-                        : 'border-slate-200/60 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-extrabold text-slate-900 text-sm">{addr.title}</p>
-                        {addr.default && (
-                          <span className="text-[9px] font-black tracking-wider uppercase px-2 py-0.5 bg-accent text-slate-950 rounded-full shadow-inner">
-                            Default Drop
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] font-semibold text-slate-400 leading-relaxed">{addr.address}</p>
-                    </div>
-                    <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
-                      <Button variant="ghost" size="sm" className="rounded-xl border border-slate-200/50 font-bold text-xs py-1.5 px-3">
-                        Edit
-                      </Button>
-                      <Button variant="ghost" size="sm" className="rounded-xl font-bold text-red-500 hover:text-red-600 hover:bg-red-50 py-1.5 px-2">
-                        <Trash2 size={15} />
-                      </Button>
-                    </div>
+                {loadingAddresses ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="animate-spin text-primary h-8 w-8" />
                   </div>
-                ))}
+                ) : addresses.length === 0 ? (
+                  <p className="text-center text-slate-400 py-8 font-semibold">No saved addresses found.</p>
+                ) : (
+                  addresses.map((addr) => (
+                    <div
+                      key={addr._id}
+                      className={`p-4 border rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                        addr.isDefault
+                          ? 'border-accent bg-emerald-50/5 ring-1 ring-accent'
+                          : 'border-slate-200/60 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-extrabold text-slate-900 text-sm">{addr.title}</p>
+                          {addr.isDefault && (
+                            <span className="text-[9px] font-black tracking-wider uppercase px-2 py-0.5 bg-accent text-slate-950 rounded-full shadow-inner">
+                              Default Drop
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-400 leading-relaxed">{addr.addressLine}</p>
+                      </div>
+                      <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-xl font-bold text-red-500 hover:text-red-600 hover:bg-red-50 py-1.5 px-2"
+                          onClick={() => handleDeleteAddress(addr._id)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </CardBody>
             </Card>
           )}
+
+          {/* Add Address Modal */}
+          <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Saved Location">
+            <form onSubmit={handleSaveAddress} className="space-y-4 text-left">
+              <Input
+                label="Location Tag"
+                placeholder="E.g., Home, Work, Apartment"
+                required
+                value={addressFormData.title}
+                onChange={(e) => setAddressFormData({ ...addressFormData, title: e.target.value })}
+                className="border-slate-200 focus:ring-accent rounded-xl text-sm font-bold text-slate-900"
+              />
+              <Input
+                label="Full Address Line"
+                placeholder="E.g., 123 Luxury Tower, Apt 12B, Road 4, Bangalore"
+                required
+                value={addressFormData.addressLine}
+                onChange={(e) => setAddressFormData({ ...addressFormData, addressLine: e.target.value })}
+                className="border-slate-200 focus:ring-accent rounded-xl text-sm font-bold text-slate-900"
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Latitude"
+                  type="number"
+                  step="0.0001"
+                  required
+                  value={addressFormData.latitude}
+                  onChange={(e) => setAddressFormData({ ...addressFormData, latitude: parseFloat(e.target.value) || 0 })}
+                  className="border-slate-200 focus:ring-accent rounded-xl text-sm font-bold text-slate-900"
+                />
+                <Input
+                  label="Longitude"
+                  type="number"
+                  step="0.0001"
+                  required
+                  value={addressFormData.longitude}
+                  onChange={(e) => setAddressFormData({ ...addressFormData, longitude: parseFloat(e.target.value) || 0 })}
+                  className="border-slate-200 focus:ring-accent rounded-xl text-sm font-bold text-slate-900"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="defaultAddressCheckbox"
+                  checked={addressFormData.isDefault}
+                  onChange={(e) => setAddressFormData({ ...addressFormData, isDefault: e.target.checked })}
+                  className="rounded text-accent focus:ring-accent"
+                />
+                <label htmlFor="defaultAddressCheckbox" className="text-xs font-bold text-slate-600 uppercase select-none">
+                  Set as default shipping drop
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)} className="rounded-xl px-4 text-xs font-bold">
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-primary text-white rounded-xl px-4 text-xs font-bold shadow-md">
+                  Save Location
+                </Button>
+              </div>
+            </form>
+          </Modal>
         </div>
       </div>
     </div>

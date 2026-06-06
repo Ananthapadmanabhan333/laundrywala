@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader, CardBody, CardFooter } from '@/components/ui/Card'
 import { useCartStore } from '@/store/cart'
-import { Plus, Minus, Trash2, ChevronRight, ShoppingCart, ShieldCheck, Clock, MapPin, ChevronLeft } from 'lucide-react'
+import { useAuthStore } from '@/store/auth'
+import { apiClient } from '@/lib/api-client'
+import { Plus, Minus, Trash2, ChevronRight, ShoppingCart, ShieldCheck, Clock, MapPin, ChevronLeft, Loader2, Tag } from 'lucide-react'
 import { toast } from 'react-toastify'
 
 const MEN_ITEMS = [
@@ -54,6 +56,7 @@ const SERVICES = [
 export default function BookLaundryPage() {
   const router = useRouter()
   const { items, addItem, removeItem, updateItem, clearCart } = useCartStore()
+  const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState<'men' | 'women' | 'essentials' | 'household'>('men')
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; price: number; icon: string } | null>(null)
   const [selectedService, setSelectedService] = useState<string>('wash_iron')
@@ -67,6 +70,37 @@ export default function BookLaundryPage() {
   const [deliverySlot, setDeliverySlot] = useState('')
   const [notes, setNotes] = useState('')
 
+  // Connected state
+  const [dbPricing, setDbPricing] = useState<any[]>([])
+  const [addresses, setAddresses] = useState<any[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('')
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null)
+  const [discountAmount, setDiscountAmount] = useState(0)
+  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'cod'>('cod')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    const fetchPricingAndAddresses = async () => {
+      try {
+        const pricingRes = await apiClient.get<any>('/api/pricing')
+        if (pricingRes?.success && pricingRes.data) {
+          setDbPricing(pricingRes.data)
+        }
+        const addressRes = await apiClient.get<any>('/api/addresses')
+        if (addressRes?.success && addressRes.data) {
+          setAddresses(addressRes.data)
+          const def = addressRes.data.find((a: any) => a.isDefault)
+          if (def) setSelectedAddressId(def._id)
+          else if (addressRes.data.length > 0) setSelectedAddressId(addressRes.data[0]._id)
+        }
+      } catch (e) {
+        console.error('Failed to load initial booking details:', e)
+      }
+    }
+    fetchPricingAndAddresses()
+  }, [])
+
   const currentItems = {
     men: MEN_ITEMS,
     women: WOMEN_ITEMS,
@@ -79,12 +113,31 @@ export default function BookLaundryPage() {
     setQuantity(1)
   }
 
+  const getPrice = (item: any) => {
+    let matchedCategory = ''
+    const lowerName = item.name.toLowerCase()
+    if (lowerName.includes('t-shirt')) matchedCategory = 't-shirts'
+    else if (lowerName.includes('shirt')) matchedCategory = 'shirts'
+    else if (lowerName.includes('trouser') || lowerName.includes('jeans')) matchedCategory = 'jeans'
+    else if (lowerName.includes('saree')) matchedCategory = 'sarees'
+    else if (lowerName.includes('blazer')) matchedCategory = 'blazers'
+    else if (lowerName.includes('blanket') || lowerName.includes('duvet')) matchedCategory = 'blankets'
+    else if (lowerName.includes('curtain')) matchedCategory = 'curtains'
+    else if (lowerName.includes('shoes')) matchedCategory = 'shoes'
+    else matchedCategory = 'shirts' // fallback
+
+    const match = dbPricing.find(p => p.category === matchedCategory && p.service === selectedService)
+    if (match) {
+      return match.basePrice
+    }
+    const serviceMultiplier = SERVICES.find((s) => s.id === selectedService)?.priceMultiplier || 1
+    return Math.round(item.price * serviceMultiplier)
+  }
+
   const handleAddToCart = () => {
     if (!selectedItem) return
 
-    const basePrice = selectedItem.price
-    const serviceMultiplier = SERVICES.find((s) => s.id === selectedService)?.priceMultiplier || 1
-    const price = Math.round(basePrice * serviceMultiplier)
+    const price = getPrice(selectedItem)
 
     addItem({
       category: `${selectedItem.icon} ${selectedItem.name}`,
@@ -102,6 +155,42 @@ export default function BookLaundryPage() {
     return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
   }
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode) return
+    try {
+      const res = await apiClient.post<any>('/api/coupons/validate', {
+        code: couponCode,
+        subtotal: calculateSubtotal()
+      })
+      if (res?.success && res.data) {
+        setAppliedCoupon(res.data)
+        setDiscountAmount(res.data.discount)
+        toast.success(`Coupon ${res.data.code} applied successfully!`)
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to apply coupon')
+      setAppliedCoupon(null)
+      setDiscountAmount(0)
+    }
+  }
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null)
+    setDiscountAmount(0)
+    setCouponCode('')
+    toast.info('Coupon removed')
+  }
+
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
+
   const getActiveTabTitle = () => {
     return {
       men: "Men's Couture",
@@ -111,16 +200,116 @@ export default function BookLaundryPage() {
     }[activeTab]
   }
 
-  const triggerPayment = () => {
+  const triggerPayment = async () => {
     if (!pickupDate || !pickupTime || !deliveryDate || !deliverySlot) {
       toast.error('Please specify both collection and dropoff slot preferences.')
-      alert('Please fill out all schedule options before proceeding.')
+      return
+    }
+    if (!selectedAddressId) {
+      toast.error('Please select an address for pickup and delivery.')
       return
     }
 
-    alert('Care Dispatch created successfully! Redirecting you to secure payment gateway.')
-    clearCart()
-    router.push('/dashboard/orders')
+    const addr = addresses.find(a => a._id === selectedAddressId)
+    if (!addr) {
+      toast.error('Selected address is invalid.')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const orderRes = await apiClient.post<any>('/api/orders', {
+        clothes: items.map(item => ({
+          category: item.category.slice(item.category.indexOf(' ') + 1), // remove icon prefix for clean DB storage
+          quantity: item.quantity,
+          service: item.service,
+          price: item.price
+        })),
+        pickupDate,
+        deliveryDate,
+        address: addr.addressLine,
+        latitude: addr.latitude,
+        longitude: addr.longitude,
+        paymentMethod
+      })
+
+      if (!orderRes?.success || !orderRes.data) {
+        throw new Error(orderRes?.message || 'Failed to create order')
+      }
+
+      const { orderId, total } = orderRes.data
+
+      // Apply coupon details on order if discount exists
+      if (appliedCoupon && discountAmount > 0) {
+        await apiClient.put<any>(`/api/orders/${orderId}`, {
+          discount: discountAmount
+        })
+      }
+
+      if (paymentMethod === 'cod') {
+        toast.success('Order created successfully with cash on delivery!')
+        clearCart()
+        router.push('/dashboard/orders')
+      } else {
+        const isLoaded = await loadRazorpayScript()
+        if (!isLoaded) {
+          toast.error('Razorpay SDK failed to load. Check your network.')
+          setIsSubmitting(false)
+          return
+        }
+
+        const payOrderRes = await apiClient.post<any>('/api/payments/create', {
+          orderId,
+          amount: total - discountAmount
+        })
+
+        if (!payOrderRes?.success || !payOrderRes.data) {
+          throw new Error(payOrderRes?.message || 'Failed to create payment transaction')
+        }
+
+        const { razorpayOrderId, keyId } = payOrderRes.data
+
+        const options = {
+          key: keyId,
+          amount: (total - discountAmount) * 100,
+          currency: 'INR',
+          name: 'MANODROP',
+          description: 'Premium Laundry & Couture Care',
+          order_id: razorpayOrderId,
+          handler: async (response: any) => {
+            try {
+              const verifyRes = await apiClient.post<any>('/api/payments/verify', {
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              })
+              if (verifyRes?.success) {
+                toast.success('Payment completed & order verified!')
+                clearCart()
+                router.push('/dashboard/orders')
+              } else {
+                toast.error('Payment verification failed.')
+              }
+            } catch (err: any) {
+              toast.error(err.message || 'Payment verification request failed')
+            }
+          },
+          prefill: {
+            name: user?.name,
+            contact: user?.phone,
+          },
+          theme: {
+            color: '#0f172a',
+          }
+        }
+        const rzp = new (window as any).Razorpay(options)
+        rzp.open()
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create dispatch order')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -414,9 +603,43 @@ export default function BookLaundryPage() {
                   <span className="text-slate-500">Taxes (5% GST)</span>
                   <span className="text-slate-900">₹{Math.round(calculateSubtotal() * 0.05)}</span>
                 </div>
+
+                <div className="border-t border-slate-100 pt-4 space-y-2">
+                  <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500">Promotional Coupon</label>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 p-2 rounded-xl text-xs font-bold text-emerald-800">
+                      <div className="flex items-center gap-1.5">
+                        <Tag size={14} className="text-accent" />
+                        <span>{appliedCoupon.code} applied</span>
+                      </div>
+                      <button type="button" onClick={handleRemoveCoupon} className="text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Enter code (e.g. WELCOME10)"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        className="bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary w-full uppercase"
+                      />
+                      <Button size="sm" onClick={handleApplyCoupon} className="rounded-xl px-3 text-xs bg-slate-900 text-white font-bold hover:bg-slate-800 shrink-0">
+                        Apply
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm font-semibold text-emerald-600">
+                    <span>Coupon Discount</span>
+                    <span>-₹{discountAmount}</span>
+                  </div>
+                )}
+
                 <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-base font-extrabold">
                   <span className="text-slate-900">Grand Total</span>
-                  <span className="text-xl text-accent">₹{calculateSubtotal() + 49 + Math.round(calculateSubtotal() * 0.05)}</span>
+                  <span className="text-xl text-accent">₹{Math.max(0, calculateSubtotal() + 49 + Math.round(calculateSubtotal() * 0.05) - discountAmount)}</span>
                 </div>
               </CardBody>
               <CardFooter className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
@@ -443,6 +666,34 @@ export default function BookLaundryPage() {
               <h2 className="text-xl font-extrabold text-slate-900">Configure Secure Dispatch Schedulers</h2>
             </CardHeader>
             <CardBody className="p-6 space-y-6">
+              {/* Address Selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                  Select Pickup & Delivery Address
+                </label>
+                {addresses.length === 0 ? (
+                  <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex flex-col gap-2">
+                    <p className="text-xs text-amber-800 font-bold">No saved locations found. Please save an address in your account settings first.</p>
+                    <Button size="sm" onClick={() => router.push('/dashboard/settings')} className="bg-slate-900 text-white font-bold rounded-xl text-xs py-2 w-max">
+                      Go to Settings
+                    </Button>
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={selectedAddressId}
+                    onChange={(e) => setSelectedAddressId(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-accent rounded-xl text-sm font-bold text-slate-900 bg-white"
+                  >
+                    {addresses.map((addr) => (
+                      <option key={addr._id} value={addr._id}>
+                        {addr.title}: {addr.addressLine}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2">Preferred Collection Date</label>
@@ -494,6 +745,39 @@ export default function BookLaundryPage() {
                 </div>
               </div>
 
+              {/* Payment Method Selection */}
+              <div className="space-y-2">
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+                  Secure Payment Options
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cod')}
+                    className={`p-4 rounded-xl border-2 transition-all text-left flex flex-col justify-between h-24 ${
+                      paymentMethod === 'cod'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-slate-100 bg-white hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm text-slate-900">Cash on Delivery (COD)</span>
+                    <span className="text-[10px] font-semibold text-slate-500 leading-tight">Pay cash or scan QR upon delivery dispatch.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('razorpay')}
+                    className={`p-4 rounded-xl border-2 transition-all text-left flex flex-col justify-between h-24 ${
+                      paymentMethod === 'razorpay'
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-slate-100 bg-white hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="font-extrabold text-sm text-slate-900">Online Razorpay Checkout</span>
+                    <span className="text-[10px] font-semibold text-slate-500 leading-tight">Pay online securely via Cards, UPI, Netbanking.</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-500">
                   Special Fabric Handling / Safe-Drop instructions
@@ -522,9 +806,17 @@ export default function BookLaundryPage() {
               <Button
                 fullWidth
                 onClick={triggerPayment}
-                className="bg-gradient-to-r from-accent to-emerald-500 hover:from-emerald-500 hover:to-accent text-slate-950 font-bold py-3.5 rounded-xl shadow-lg transition-all"
+                disabled={isSubmitting || items.length === 0}
+                className="bg-gradient-to-r from-accent to-emerald-500 hover:from-emerald-500 hover:to-accent text-slate-950 font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
               >
-                Schedule Doorstep Collection
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-slate-950" />
+                    Scheduling Dispatch...
+                  </>
+                ) : (
+                  'Schedule Doorstep Collection'
+                )}
               </Button>
             </CardFooter>
           </Card>

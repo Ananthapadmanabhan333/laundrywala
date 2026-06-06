@@ -71,6 +71,13 @@ export interface IOrder extends Document {
   updatedAt: Date
 }
 
+const orderNotificationSchema = new Schema({
+  userId: { type: String, required: true },
+  message: { type: String, required: true },
+  type: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+})
+
 const orderSchema = new Schema<IOrder>(
   {
     orderNumber: {
@@ -163,14 +170,7 @@ const orderSchema = new Schema<IOrder>(
       transactionId: String,
       paidAt: Date,
     },
-    notifications: [
-      {
-        userId: String,
-        message: String,
-        type: String,
-        createdAt: { type: Date, default: Date.now },
-      },
-    ],
+    notifications: [orderNotificationSchema],
   },
   {
     timestamps: true,

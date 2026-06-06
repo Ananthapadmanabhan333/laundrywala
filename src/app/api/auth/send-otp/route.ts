@@ -10,7 +10,11 @@ const phoneSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB()
+    try {
+      await connectDB()
+    } catch (dbError) {
+      console.warn('⚠️ MongoDB connection failed. Operating in Mock Development Mode.')
+    }
 
     const body = await request.json()
     const validation = phoneSchema.safeParse(body)
