@@ -123,4 +123,4 @@ laundrywala/
 
 ---
 
-Built with ❤️ by the **MANODROP Team**
+Built by Ananthapadmanabhan 
