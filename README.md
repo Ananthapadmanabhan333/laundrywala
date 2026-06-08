@@ -21,26 +21,22 @@ The application's theme and visuals are built strictly around the **MANODROP** b
 
 ## 🚀 Key Premium Features
 
-### 1. Bespoke Couture Booking Flow
-*   **Dedicated Couture Segments**: Tailored categories for **Men's Couture**, **Women's Couture**, **Daily Essentials**, and **Household Linens**.
-*   **Interactive Treatment Multipliers**: Seamless dynamic calculation of costs based on textile treatment levels:
-    *   `Eco-clean Soft Wash` (x1.0 Multiplier)
-    *   `Wrinkle-Free Steam Press` (x1.5 Multiplier)
-    *   `Premium Dry Cleaning` (x2.0 Multiplier)
-    *   `Couture Restoration` (x2.5 Multiplier)
-*   **Logistics Scheduler**: Pickups and drop-offs are planned using local calendar date/time selectors.
+### 1. Bespoke Couture Booking & Smart Cart
+- **Dedicated Couture Segments**: Tailored categories for **Men's Couture**, **Women's Couture**, **Daily Essentials**, and **Household Linens**.
+- **Instant Quantity Badges**: Garment cards update immediately with a numerical counter badge showing items added to the cart.
+- **Zustand Local Storage Persistence**: State is automatically persisted in `localStorage` to prevent cart loss on page reloads or routing.
+- **Dynamic Pricing Multipliers**: Automatic calculation of costs based on selected care treatment levels.
 
-### 2. Real-Time Telemetry & Sidebar Badges
-*   **Live Navigation Cart Counter**: A pulsing emerald-green numeric items counter badge next to the "Place Order" menu in the sidebar navigation.
-*   **Dynamic Cart Calculations**: Tracks all garments added to the checkout state and updates in real-time.
+### 2. Amazon-style Unified Checkout Flow (`/dashboard/book/review`)
+- **Itemized Verification Summary**: Live calculations of subtotal, tax (5% GST), courier dispatch fee (₹50), promotional discount, and grand total.
+- **Promotional Coupons**: Real-time validation of coupon codes (e.g., `WELCOME10`) using `/api/coupons/validate`.
+- **Inline Address Manager**: Select from saved locations or dynamically add new addresses (Home, Work, Other) inline during checkout without leaving the page.
+- **Flexible Timetable Schedulers**: Select preferred dates and time slots for both doorstep collection and final return delivery.
 
-### 3. Advanced Logistics & Secure Timelines
-*   **Secure Dispatch Protocol**: Integrates safe-drop courier notes, delivery maps, and an encrypted **📶 Smart Beacon Secure Dispatch Code** (e.g., `MN-BEACON-8942-X`).
-*   **Interactive Vertical Timelines**: Chronological progress tracking with custom status badges representing courier assignment, eco-washing cycles, and pristine delivery state.
-
-### 4. Enterprise Profiles & Settings
-*   **Interactive Avatars**: Sleek profile widget using dual-ring emerald gradients.
-*   **Security Command Center**: Custom switches for notifications, password updates, 2FA authorization cards, and default delivery addresses.
+### 3. payment & Verification Integrations
+- **Razorpay Secure Checkout**: Integrated with online payment overlays. Supports sandbox fallbacks to simulate signature verification during local development.
+- **Cash on Delivery (COD)**: Option to finalize order instantly and pay at delivery.
+- **Secure Timelines**: Embedded vertical timelines showing chronological progress (Order Placed, Pickup Assigned, Picked Up, Facility Care, Out for Delivery, Delivered) synced from MongoDB order documents.
 
 ---
 
