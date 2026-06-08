@@ -15,11 +15,15 @@ const createOrderSchema = z.object({
     })
   ),
   pickupDate: z.string(),
+  pickupTimeSlot: z.string().optional(),
   deliveryDate: z.string(),
+  deliveryTimeSlot: z.string().optional(),
   address: z.string(),
   latitude: z.number(),
   longitude: z.number(),
   paymentMethod: z.enum(['razorpay', 'cod']),
+  discount: z.number().optional(),
+  notes: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -34,8 +38,19 @@ export async function POST(request: NextRequest) {
       throw new AppError(400, 'Invalid request', validation.error.errors)
     }
 
-    const { clothes, pickupDate, deliveryDate, address, latitude, longitude, paymentMethod } =
-      validation.data
+    const {
+      clothes,
+      pickupDate,
+      pickupTimeSlot = '9:00 AM - 12:00 PM',
+      deliveryDate,
+      deliveryTimeSlot = '6:00 PM - 9:00 PM',
+      address,
+      latitude,
+      longitude,
+      paymentMethod,
+      discount = 0,
+      notes = '',
+    } = validation.data
 
     // Generate order number
     const orderNumber = `ORD${Date.now()}`
@@ -48,7 +63,7 @@ export async function POST(request: NextRequest) {
 
     const tax = Math.round(subtotal * 0.05)
     const deliveryFee = 50
-    const total = subtotal + tax + deliveryFee
+    const total = Math.max(0, subtotal + tax + deliveryFee - discount)
 
     // Create order
     const order = new Order({
@@ -61,26 +76,27 @@ export async function POST(request: NextRequest) {
         latitude,
         longitude,
         scheduledDate: new Date(pickupDate),
-        timeSlot: '9:00 AM - 12:00 PM', // TODO: Get from form
+        timeSlot: pickupTimeSlot,
+        notes,
       },
       deliveryDetails: {
         address,
         latitude,
         longitude,
         estimatedDate: new Date(deliveryDate),
-        timeSlot: '6:00 PM - 9:00 PM', // TODO: Get from form
+        timeSlot: deliveryTimeSlot,
       },
       status: 'pending',
       pricing: {
         subtotal,
         tax,
-        discount: 0,
+        discount,
         deliveryFee,
         total,
       },
       payment: {
         method: paymentMethod,
-        status: paymentMethod === 'cod' ? 'pending' : 'pending',
+        status: 'pending',
       },
       timeline: [
         {

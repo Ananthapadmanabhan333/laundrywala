@@ -108,9 +108,22 @@ export default function BookLaundryPage() {
     household: HOUSEHOLD_ITEMS,
   }[activeTab]
 
+  const getCartQuantity = (item: any) => {
+    const cartItem = items.find((i) => i.category === `${item.icon} ${item.name}`)
+    return cartItem ? cartItem.quantity : 0
+  }
+
   const handleItemClick = (item: { id: string; name: string; price: number; icon: string }) => {
+    const price = getPrice(item)
+    addItem({
+      category: `${item.icon} ${item.name}`,
+      quantity: 1,
+      service: selectedService as any,
+      price,
+    })
     setSelectedItem(item)
     setQuantity(1)
+    toast.success(`${item.name} added to your MANODROP checkout!`)
   }
 
   const getPrice = (item: any) => {
@@ -377,23 +390,31 @@ export default function BookLaundryPage() {
               </CardHeader>
               <CardBody className="p-6 space-y-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {currentItems.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => handleItemClick(item)}
-                      className={`p-5 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center space-y-3 relative ${
-                        selectedItem?.id === item.id
-                          ? 'border-accent bg-accent/5 ring-1 ring-accent'
-                          : 'border-slate-100 bg-white hover:border-accent/40'
-                      }`}
-                    >
-                      <div className="text-4xl bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center shadow-inner">{item.icon}</div>
-                      <div className="space-y-1">
-                        <p className="font-extrabold text-sm text-slate-900 leading-tight">{item.name}</p>
-                        <p className="text-xs font-extrabold text-accent">₹{item.price} base</p>
-                      </div>
-                    </button>
-                  ))}
+                  {currentItems.map((item) => {
+                    const qty = getCartQuantity(item)
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleItemClick(item)}
+                        className={`p-5 rounded-2xl border-2 transition-all text-center flex flex-col items-center justify-center space-y-3 relative ${
+                          selectedItem?.id === item.id
+                            ? 'border-accent bg-accent/5 ring-1 ring-accent'
+                            : 'border-slate-100 bg-white hover:border-accent/40'
+                        }`}
+                      >
+                        {qty > 0 && (
+                          <span className="absolute top-2.5 right-2.5 bg-accent text-slate-950 font-black text-xs w-6.5 h-6.5 rounded-full flex items-center justify-center shadow-md animate-scale-in">
+                            {qty}
+                          </span>
+                        )}
+                        <div className="text-4xl bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center shadow-inner">{item.icon}</div>
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-sm text-slate-900 leading-tight">{item.name}</p>
+                          <p className="text-xs font-extrabold text-accent">₹{item.price} base</p>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 {/* Sub Options detail drawer when an item is selected */}
@@ -488,11 +509,19 @@ export default function BookLaundryPage() {
           {/* Quick Cart Summary View */}
           <div className="lg:col-span-4 sticky top-24">
             <Card variant="elevated" className="border-2 border-primary/20 shadow-lg rounded-3xl overflow-hidden bg-white">
-              <CardHeader className="bg-primary text-white p-5">
+              <CardHeader className="bg-primary text-white p-5 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <ShoppingCart size={20} className="text-accent" />
                   <h2 className="text-base font-black uppercase tracking-wider">Care Dispatch Cart</h2>
                 </div>
+                {items.length > 0 && (
+                  <button
+                    onClick={clearCart}
+                    className="text-xs font-bold text-emerald-400 hover:text-accent transition-colors uppercase tracking-wider"
+                  >
+                    Clear Cart
+                  </button>
+                )}
               </CardHeader>
               <CardBody className="p-5 space-y-4">
                 {items.length === 0 ? (
@@ -548,7 +577,7 @@ export default function BookLaundryPage() {
                 </div>
                 <Button
                   fullWidth
-                  onClick={() => setStep('cart')}
+                  onClick={() => router.push('/dashboard/book/review')}
                   disabled={items.length === 0}
                   className="bg-gradient-to-r from-accent to-emerald-500 hover:from-emerald-500 hover:to-accent text-slate-950 font-bold py-3.5 rounded-xl shadow transition-all flex items-center justify-center"
                 >
